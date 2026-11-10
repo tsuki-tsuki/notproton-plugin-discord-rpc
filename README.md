@@ -5,30 +5,31 @@ under NotProton to the macOS Discord desktop app. It bridges Discord's Windows
 named pipe to Discord's local Unix socket. The game supplies its own Discord
 application ID and activity, so there is no plugin-wide application ID or token.
 
-This package targets the proposed NotProton `session_helper` descriptor field.
-It requires a NotProton build implementing that contract. NotProton 1.2.4 and
-upstream main at `d69a6b5` reject the new field. For those builds, use the
-Rosetta-only injection package from commit `6db6ecf`.
+Choose one ZIP for your NotProton build. Both install the same per-game toggle.
+
+| Archive | Compatibility |
+| --- | --- |
+| `notproton-plugin-discord-rpc.zip` | NotProton 1.2.4 or its plugin preview on supported Rosetta tools |
+| `notproton-plugin-discord-rpc-session-helper.zip` | Rosetta and FEX on a NotProton build implementing the proposed `session_helper` field |
 
 Games need to implement Discord's local RPC protocol for the bridge to show
 activity.
 
 ## Install
 
-Quit Steam. Extract the release ZIP **into** `~/Library/Application Support/notproton`
+Quit Steam. Extract the matching ZIP **into** `~/Library/Application Support/notproton`
 so that the archive's `plugins/` and `integrations/` directories merge into the
-existing ones. For example, from the download directory run:
+existing ones. For example, to install the Rosetta injection build from the download directory:
 
 ```sh
-unzip -o notproton-plugin-discord-rpc-session-helper.zip -d "$HOME/Library/Application Support/notproton"
+unzip -o notproton-plugin-discord-rpc.zip -d "$HOME/Library/Application Support/notproton"
 ```
 
 1. Open Discord on macOS and enable activity sharing if you want your activity visible.
 2. Open Steam, then open the game's **Properties → Compatibility**.
-3. Select a NotProton Rosetta or FEX tool and enable **Discord Rich Presence** in the
+3. Select a compatible NotProton tool and enable **Discord Rich Presence** in the
    Developer section. The toggle sets `NOTPROTON_DISCORD_BRIDGE=1` for that game.
-4. Launch the game. The helper starts alongside Wine and closes when the NotProton
-   session owner exits. Games that attempt RPC during a cold start may need to retry
+4. Launch the game. The bridge runs alongside Wine and shuts down with the session. Games that attempt RPC during a cold start may need to retry
    the connection while the helper starts.
 
 To uninstall, quit Steam and remove `plugins/discord-rpc.conf` and
@@ -44,7 +45,7 @@ make test
 make release
 ```
 
-The archive is `dist/notproton-plugin-discord-rpc-session-helper.zip`. Set
+Both archives are written to `dist/`. Set
 `CX_ROOT` to the runner's CrossOver directory and set `DISCORD_TEST_WINE` and
 `DISCORD_TEST_WINESERVER` to the matching runner executables. Run `make wine-test`
 to exercise the helper with 32-bit and 64-bit clients in a disposable prefix
