@@ -1,0 +1,13 @@
+NotProton Discord RPC plugin
+
+The relay (host.c, pipe.c, protocol.h) and the original transport tests were
+adapted from NotProton PR #273. Jozef Tokarcik (@sn0wst0rm) wrote the bridge
+in PR #119. @idk-some-guy rebased and updated it in PR #273.
+The bootstrap, descriptor, and standalone build and packaging are additions
+for this project.
+
+https://github.com/NotProtonNot/NotProton/pull/119
+https://github.com/NotProtonNot/NotProton/pull/273
+
+Distributed under GNU GPL version 3. See LICENSE. Distribute the corresponding
+source from this repository alongside any published binary release.
