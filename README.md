@@ -57,11 +57,21 @@ updated ZIP over it.
 
 ### Game artwork
 
-Basic activity uses a Steam-hosted icon when Steam has cached its hash.
-Otherwise it requests the game's Steam header artwork by AppID. To override
-Steam game artwork, create an `activity-icons/<AppID>` file next to the installed
-`host` containing a public HTTPS image URL or Discord asset key. Non-Steam
-shortcuts use the registered Discord application's icon.
+Basic activity looks for artwork in this order:
+
+1. A per-game override. Put a public HTTPS image URL or Discord asset key in
+   `activity-icons/<AppID>` next to the installed `host`.
+2. A Steam-hosted icon identified by Steam's local cache.
+3. A SteamGridDB icon, if you supplied an API key.
+4. Steam's header artwork by AppID.
+
+To enable SteamGridDB, put your key in a plain-text file named
+`steamgriddb-api-key` next to the installed `host` in
+`~/Library/Application Support/notproton/integrations/discord-rpc/`.
+Keep this file private. The plugin sends the key and the game's Steam AppID
+to SteamGridDB only when it needs a lookup. If the API returns no suitable
+icon or times out, the Steam header remains the fallback. Non-Steam shortcuts
+use the registered Discord application's icon.
 
 ## Build and verify
 

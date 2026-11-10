@@ -33,7 +33,11 @@ build/test-client.exe: tests/client.c protocol.h | build
 build/test-client32.exe: tests/client.c protocol.h | build
 	$(MINGW_CC32) $(CFLAGS) $< -lntdll -o $@
 
-test: all
+build/test-steamgriddb: tests/steamgriddb.m activity.m activity.h | build
+	$(CC) $(CFLAGS) $(MACFLAGS) -fobjc-arc $< -framework Foundation -o $@
+
+test: all build/test-steamgriddb
+	build/test-steamgriddb
 	$(PYTHON) tests/bootstrap.py build/discord-rpc.dylib
 	$(PYTHON) tests/session_helper.py build/session-helper
 	$(PYTHON) tests/host.py build/host

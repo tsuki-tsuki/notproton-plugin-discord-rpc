@@ -12,6 +12,9 @@
 static NSString *client_id;
 static NSString *game_title;
 static NSString *game_icon;
+// The network completion and relay loop exchange only the lookup result.
+static NSString *grid_icon;
+static bool grid_pending;
 static NSNumber *started;
 static int fd = -1;
 static bool published;
@@ -117,6 +120,59 @@ static NSString *shortcut_title(NSString *steam, uint32_t id)
     return nil;
 }
 
+static NSURLRequest *grid_request(NSString *app_id, NSString *key)
+{
+    if (!key.length || [key rangeOfCharacterFromSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].location != NSNotFound ||
+        [key rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location != NSNotFound) return nil;
+    NSString *url = [NSString stringWithFormat:
+        @"https://www.steamgriddb.com/api/v2/icons/steam/%@?nsfw=false&humor=false", app_id];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
+    [request setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
+    return request;
+}
+
+static NSString *grid_response_icon(NSData *data)
+{
+    if (!data.length || data.length > 1024 * 1024) return nil;
+    id body = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+    if (![body isKindOfClass:NSDictionary.class] || ![body[@"success"] isEqual:@YES] ||
+        ![body[@"data"] isKindOfClass:NSArray.class]) return nil;
+    for (id entry in body[@"data"]) {
+        if (![entry isKindOfClass:NSDictionary.class]) continue;
+        id value = entry[@"url"];
+        if (![value isKindOfClass:NSString.class] || [value length] > 300) continue;
+        NSURLComponents *url = [NSURLComponents componentsWithString:value];
+        if ([url.scheme.lowercaseString isEqual:@"https"] &&
+            [url.host.lowercaseString isEqual:@"cdn.steamgriddb.com"] && !url.user && !url.password)
+            return value;
+    }
+    return nil;
+}
+
+static void lookup_grid_icon(NSString *directory, NSString *app_id)
+{
+    NSString *path = [directory stringByAppendingPathComponent:@"steamgriddb-api-key"];
+    NSString *key = [read_text(path, 1024) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSURLRequest *request = grid_request(app_id, key);
+    if (!request) return;
+
+    NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+    config.timeoutIntervalForRequest = 2;
+    config.timeoutIntervalForResource = 2;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    @synchronized (NSURLSession.class) {
+        grid_pending = true;
+    }
+    [[session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSHTTPURLResponse *http = [response isKindOfClass:NSHTTPURLResponse.class] ? (NSHTTPURLResponse *)response : nil;
+        @synchronized (NSURLSession.class) {
+            if (!error && http.statusCode == 200) grid_icon = grid_response_icon(data);
+            grid_pending = false;
+        }
+    }] resume];
+    [session finishTasksAndInvalidate];
+}
+
 static NSString *find_game_icon(NSString *directory, NSString *steam, NSString *app_id, bool shortcut)
 {
     if (shortcut || !digits(app_id)) return nil;
@@ -136,6 +192,7 @@ static NSString *find_game_icon(NSString *directory, NSString *steam, NSString *
         if ([entry rangeOfString:@"^[0-9a-f]{40}\\.jpg$" options:NSRegularExpressionSearch].location != NSNotFound)
             return [NSString stringWithFormat:@"https://shared.fastly.steamstatic.com/community_assets/images/apps/%@/%@", app_id, entry];
     }
+    lookup_grid_icon(directory, app_id);
     return [NSString stringWithFormat:@"https://cdn.cloudflare.steamstatic.com/steam/apps/%@/header.jpg", app_id];
 }
 
@@ -284,6 +341,13 @@ void activity_tick(double now, bool game_connected, int (*connect_socket)(void))
             retry_at = now + 2;
         }
         if (now < retry_at) return;
+        @synchronized (NSURLSession.class) {
+            if (grid_pending) return;
+            if (grid_icon) {
+                game_icon = grid_icon;
+                grid_icon = nil;
+            }
+        }
         fd = connect_socket();
         if (fd >= 0 && send_json(0, @{@"v": @1, @"client_id": client_id})) {
             ready_deadline = now + 2;
