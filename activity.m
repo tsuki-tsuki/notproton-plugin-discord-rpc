@@ -11,6 +11,7 @@
 
 static NSString *client_id;
 static NSString *game_title;
+static NSString *game_icon;
 static NSNumber *started;
 static int fd = -1;
 static bool published;
@@ -75,35 +76,67 @@ static NSString *shortcut_record(const unsigned char **cursor, const unsigned ch
     return nil;
 }
 
-static NSString *shortcut_title(void)
+static NSString *steam_root(void)
 {
-    NSString *game_id = environment("SteamGameId");
-    if (!digits(game_id)) return nil;
-    errno = 0;
-    uint64_t id = strtoull(game_id.UTF8String, NULL, 10);
-    if (errno || (uint32_t)id != 0x02000000) return nil;
-
     NSFileManager *files = NSFileManager.defaultManager;
     NSString *steam = [environment("STEAM_COMPAT_CLIENT_INSTALL_PATH") stringByStandardizingPath];
     for (unsigned level = 0; steam.isAbsolutePath && level < 8; ++level) {
-        NSString *userdata = [steam stringByAppendingPathComponent:@"userdata"];
-        NSArray<NSString *> *accounts = [files contentsOfDirectoryAtPath:userdata error:NULL];
-        if (accounts) {
-            for (NSString *account in accounts) {
-                if (!digits(account)) continue;
-                NSString *config = [[userdata stringByAppendingPathComponent:account]
-                    stringByAppendingPathComponent:@"config/shortcuts.vdf"];
-                NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:config];
-                NSData *data = [file readDataUpToLength:4 * 1024 * 1024 + 1 error:NULL];
-                [file closeFile];
-                if (!data.length || data.length > 4 * 1024 * 1024) continue;
-                const unsigned char *cursor = data.bytes;
-                NSString *title = shortcut_record(&cursor, cursor + data.length, (uint32_t)(id >> 32), 0);
-                if (title.length) return title;
-            }
-            return nil;
-        }
+        if ([files fileExistsAtPath:[steam stringByAppendingPathComponent:@"userdata"]] ||
+            [files fileExistsAtPath:[steam stringByAppendingPathComponent:@"appcache"]]) return steam;
         steam = steam.stringByDeletingLastPathComponent;
+    }
+    return [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/Steam"];
+}
+
+static uint32_t shortcut_id(void)
+{
+    NSString *game_id = environment("SteamGameId");
+    if (!digits(game_id)) return 0;
+    errno = 0;
+    uint64_t id = strtoull(game_id.UTF8String, NULL, 10);
+    return !errno && (uint32_t)id == 0x02000000 ? (uint32_t)(id >> 32) : 0;
+}
+
+static NSString *shortcut_title(NSString *steam, uint32_t id)
+{
+    if (!id) return nil;
+    NSString *userdata = [steam stringByAppendingPathComponent:@"userdata"];
+    NSArray<NSString *> *accounts = [NSFileManager.defaultManager contentsOfDirectoryAtPath:userdata error:NULL];
+    for (NSString *account in accounts) {
+        if (!digits(account)) continue;
+        NSString *config = [[userdata stringByAppendingPathComponent:account]
+            stringByAppendingPathComponent:@"config/shortcuts.vdf"];
+        NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:config];
+        NSData *data = [file readDataUpToLength:4 * 1024 * 1024 + 1 error:NULL];
+        [file closeFile];
+        if (!data.length || data.length > 4 * 1024 * 1024) continue;
+        const unsigned char *cursor = data.bytes;
+        NSString *title = shortcut_record(&cursor, cursor + data.length, id, 0);
+        if (title.length) return title;
+    }
+    return nil;
+}
+
+static NSString *find_game_icon(NSString *directory, NSString *steam, NSString *app_id, bool shortcut)
+{
+    if (!digits(app_id)) return nil;
+    NSString *override = [[directory stringByAppendingPathComponent:@"activity-icons"]
+        stringByAppendingPathComponent:app_id];
+    NSString *icon = [read_text(override, 1024) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (icon.length && icon.length <= 300 &&
+        [icon rangeOfCharacterFromSet:NSCharacterSet.controlCharacterSet].location == NSNotFound) {
+        NSURLComponents *url = [NSURLComponents componentsWithString:icon];
+        if (([url.scheme.lowercaseString isEqual:@"https"] && url.host.length && !url.user && !url.password) ||
+            [icon rangeOfString:@"^[a-zA-Z0-9_-]+$" options:NSRegularExpressionSearch].location != NSNotFound)
+            return icon;
+    }
+    if (shortcut) return nil;
+
+    NSString *cache = [[steam stringByAppendingPathComponent:@"appcache/librarycache"] stringByAppendingPathComponent:app_id];
+    NSArray<NSString *> *entries = [NSFileManager.defaultManager contentsOfDirectoryAtPath:cache error:NULL];
+    for (NSString *entry in [entries sortedArrayUsingSelector:@selector(compare:)]) {
+        if ([entry rangeOfString:@"^[0-9a-f]{40}\\.jpg$" options:NSRegularExpressionSearch].location != NSNotFound)
+            return [NSString stringWithFormat:@"https://shared.fastly.steamstatic.com/community_assets/images/apps/%@/%@", app_id, entry];
     }
     return nil;
 }
@@ -122,7 +155,9 @@ void activity_init(const char *host_path)
         }
 
         NSString *install = [environment("STEAM_COMPAT_INSTALL_PATH") stringByStandardizingPath];
-        game_title = shortcut_title();
+        NSString *steam = steam_root();
+        uint32_t shortcut = shortcut_id();
+        game_title = shortcut_title(steam, shortcut);
         NSString *app_id = environment("SteamAppId");
         if (!game_title && install.isAbsolutePath && digits(app_id)) {
             NSString *steamapps = install.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
@@ -144,6 +179,8 @@ void activity_init(const char *host_path)
             NSRange last = [game_title rangeOfComposedCharacterSequenceAtIndex:127];
             game_title = [game_title substringToIndex:last.location];
         }
+        NSString *icon_id = shortcut ? [NSString stringWithFormat:@"%u", shortcut] : app_id;
+        game_icon = find_game_icon(directory, steam, icon_id, shortcut != 0);
         started = @(time(NULL));
     }
 }
@@ -166,6 +203,7 @@ static bool set_activity(bool active)
 {
     NSMutableDictionary *activity = [@{@"details": game_title, @"timestamps": @{@"start": started}} mutableCopy];
     if (use_activity_name) activity[@"name"] = game_title;
+    if (game_icon) activity[@"assets"] = @{@"large_image": game_icon, @"large_text": game_title};
     id value = active ? activity : NSNull.null;
     return send_json(1, @{@"cmd": @"SET_ACTIVITY",
                           @"nonce": active ? @"activity" : @"clear",
@@ -196,8 +234,9 @@ static bool handle_frame(uint32_t opcode, NSData *payload)
     id body = [NSJSONSerialization JSONObjectWithData:payload options:0 error:NULL];
     if (![body isKindOfClass:NSDictionary.class]) return false;
     if ([body[@"evt"] isEqual:@"ERROR"]) {
-        if (published && use_activity_name && [body[@"nonce"] isEqual:@"activity"]) {
-            use_activity_name = false;
+        if (published && [body[@"nonce"] isEqual:@"activity"] && (use_activity_name || game_icon)) {
+            if (use_activity_name) use_activity_name = false;
+            else game_icon = nil;
             return set_activity(true);
         }
         return false;

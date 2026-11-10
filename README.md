@@ -55,6 +55,16 @@ while a game has a Discord RPC connection and clears when the session ends.
 The configuration is local to your install and persists when you extract an
 updated ZIP over it.
 
+### Game artwork
+
+Basic activity looks for a Steam-hosted icon using Steam's local artwork cache.
+Without an available icon, Discord uses the registered application's icon.
+To set artwork explicitly, create an `activity-icons` directory next to the
+installed `host`. Create a file named after the Steam app ID or NotProton's
+numeric shortcut prefix ID, with no extension. Put one public HTTPS image URL
+or Discord asset key in the file. For example, `activity-icons/3081447869`
+would set the artwork for a shortcut using prefix `3081447869`.
+
 ## Build and verify
 
 Use macOS with Xcode Command Line Tools, MinGW-w64, and Python 3. On Homebrew,

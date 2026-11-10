@@ -32,6 +32,13 @@ def send(peer, opcode, body):
 binary = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="np-activity-", dir="/tmp") as directory:
     root = Path(directory)
+    icons = root / "activity-icons"
+    icons.mkdir()
+    (icons / str(0x80000042)).write_text("shortcut-art\n")
+    hash_icon = "0123456789abcdef0123456789abcdef01234567"
+    cache = root / "appcache/librarycache/42"
+    cache.mkdir(parents=True)
+    (cache / (hash_icon + ".jpg")).touch()
     host = root / "host"
     host.symlink_to(binary)
     (root / "appmanifest_42.acf").write_text('"AppState"\n{\n "name" "Game title"\n}\n')
@@ -61,8 +68,16 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                    SteamGameId=str((0x80000042 << 32) | 0x02000000),
                    STEAM_COMPAT_CLIENT_INSTALL_PATH=str(root))
         args = [str(host), str(os.getpid()), str(fixture), str(endpoint)]
-        for enabled in ("0", "1"):
-            with subprocess.Popen(args, env=dict(env, NOTPROTON_DISCORD_BASIC_ACTIVITY=enabled),
+        for enabled, shortcut, expected_title, expected_icon in (
+            ("0", True, None, None),
+            ("1", True, "Steam shortcut title", "shortcut-art"),
+            ("1", False, "Game title", f"https://shared.fastly.steamstatic.com/community_assets/images/apps/42/{hash_icon}.jpg"),
+        ):
+            launch_env = dict(env, NOTPROTON_DISCORD_BASIC_ACTIVITY=enabled)
+            if not shortcut:
+                launch_env.pop("SteamGameId")
+
+            with subprocess.Popen(args, env=launch_env,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
                 try:
                     assert process.stdout.readline() == b"ready\n"
@@ -83,8 +98,11 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                         send(peer, 1, {"cmd": "DISPATCH", "evt": "READY"})
                         opcode, activity = receive(peer)
                         assert opcode == 1 and activity["cmd"] == "SET_ACTIVITY"
-                        assert activity["args"]["activity"]["details"] == "Steam shortcut title"
-                        assert activity["args"]["activity"]["name"] == "Steam shortcut title"
+                        assert activity["args"]["activity"]["details"] == expected_title
+                        assert activity["args"]["activity"]["name"] == expected_title
+                        assert activity["args"]["activity"]["assets"] == {
+                            "large_image": expected_icon, "large_text": expected_title,
+                        }
                         return peer, activity["args"]["activity"]["timestamps"]["start"]
 
                     fallback, started = accept_fallback()
