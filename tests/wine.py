@@ -145,7 +145,7 @@ with tempfile.TemporaryDirectory(prefix="np-discord-wine-") as directory:
         print("  ok    Wine helper exits when its native host stops")
 
         injected_env = dict(env, DYLD_INSERT_LIBRARIES=str(output / "discord-rpc.dylib"),
-                            NOTPROTON_DISCORD_PLUGIN="1", NOTPROTON_DISCORD_SOCKET_DIR=str(tmp))
+                            DISCORD_RPC_PLUGIN="1", NOTPROTON_DISCORD_SOCKET_DIR=str(tmp))
         result = subprocess.run([wine, str(output / "test-client.exe"), "echo", "65536", "17"],
                                 env=injected_env, capture_output=True, text=True, timeout=20)
         assert result.returncode == 0, (result.stdout, result.stderr)

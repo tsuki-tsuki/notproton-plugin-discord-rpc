@@ -15,7 +15,7 @@ extern char **environ;
 static void start_bridge(void) __attribute__((constructor));
 static void start_bridge(void)
 {
-    const char *enabled = getenv("NOTPROTON_DISCORD_PLUGIN");
+    const char *enabled = getenv("DISCORD_RPC_PLUGIN");
     const char *root = getenv("CX_ROOT");
     const char *prefix = getenv("WINEPREFIX");
     if (!enabled || strcmp(enabled, "1") || !root || root[0] != '/' ||
@@ -52,7 +52,7 @@ static void start_bridge(void)
     for (size_t i = 0; i < count; ++i) {
         const char *entry = environ[i];
         if (!strncmp(entry, "DYLD_", 5) ||
-            !strncmp(entry, "NOTPROTON_DISCORD_PLUGIN=", 25) ||
+            !strncmp(entry, "DISCORD_RPC_PLUGIN=", sizeof("DISCORD_RPC_PLUGIN=") - 1) ||
             !strncmp(entry, "NOTPROTON_FEATURE_DYLIBS=", 25) ||
             !strncmp(entry, "WINELOADER=", 11) ||
             !strncmp(entry, "WINEDLLPATH=", 12)) continue;
@@ -64,6 +64,6 @@ static void start_bridge(void)
     pid_t child;
     int error = posix_spawn(&child, host, NULL, NULL, argv, env);
     free(env);
-    if (!error) unsetenv("NOTPROTON_DISCORD_PLUGIN");
+    if (!error) unsetenv("DISCORD_RPC_PLUGIN");
     else fprintf(stderr, "NotProton Discord: could not start bridge: %s\n", strerror(error));
 }

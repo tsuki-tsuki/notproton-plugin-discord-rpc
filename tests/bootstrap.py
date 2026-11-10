@@ -19,7 +19,7 @@ import os, sys
 from pathlib import Path
 assert int(sys.argv[1]) == os.getppid()
 assert "DYLD_INSERT_LIBRARIES" not in os.environ
-assert "NOTPROTON_DISCORD_PLUGIN" not in os.environ
+assert "DISCORD_RPC_PLUGIN" not in os.environ
 Path(os.environ["RESULT"]).write_text("\\n".join(sys.argv[2:]))
 """)
     host.chmod(0o755)
@@ -36,6 +36,6 @@ Path(os.environ["RESULT"]).write_text("\\n".join(sys.argv[2:]))
                WINEPREFIX=str(prefix), RESULT=str(output), WINESERVER=str(runner / "bin/wineserver"))
     subprocess.run([loader, "0.5"], env=env, check=True)
     assert not output.exists(), "An injection without opt-in started the bridge"
-    env["NOTPROTON_DISCORD_PLUGIN"] = "1"
+    env["DISCORD_RPC_PLUGIN"] = "1"
     subprocess.run([loader, "1"], env=env, check=True)
     assert output.read_text().splitlines() == [str(loader), str(plugin / "notproton-discord.exe")]
