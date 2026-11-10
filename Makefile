@@ -20,8 +20,8 @@ build/discord-rpc.dylib: bootstrap.c | build
 	$(CC) $(CFLAGS) $(MACFLAGS) -dynamiclib $< -o $@
 	codesign -fs - --identifier org.notproton-plugin.discord-rpc $@
 
-build/host: host.c protocol.h | build
-	$(CC) $(CFLAGS) $(MACFLAGS) $< -o $@
+build/host: host.c activity.m activity.h protocol.h | build
+	$(CC) $(CFLAGS) $(MACFLAGS) -fobjc-arc host.c activity.m -framework Foundation -o $@
 	codesign -fs - --identifier org.notproton-plugin.discord-rpc.host $@
 
 build/notproton-discord.exe: pipe.c protocol.h | build
@@ -37,6 +37,7 @@ test: all
 	$(PYTHON) tests/bootstrap.py build/discord-rpc.dylib
 	$(PYTHON) tests/session_helper.py build/session-helper
 	$(PYTHON) tests/host.py build/host
+	$(PYTHON) tests/activity.py build/host
 
 wine-test: all build/test-client.exe build/test-client32.exe
 	$(PYTHON) tests/wine.py build

@@ -1,5 +1,6 @@
 // Relay the prefix's authenticated loopback connections to the user's Discord socket.
 #include "protocol.h"
+#include "activity.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -124,6 +125,7 @@ static bool authenticate(struct connection *c, const char *token, bool *ready)
     }
     if (c->hello[BRIDGE_TOKEN_LENGTH] != BRIDGE_STREAM) return false;
     c->fd[1] = connect_discord();
+    if (c->fd[1] >= 0) activity_clear();
     return c->fd[1] >= 0;
 }
 
@@ -193,6 +195,7 @@ int main(int argc, char **argv)
     signal(SIGHUP, stop);
     pid_t parent = (pid_t)runner;
     if (getppid() != parent) return 1;
+    activity_init(argv[0]);
     int listener = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in address = {.sin_family = AF_INET, .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
     socklen_t size = sizeof(address);
@@ -261,6 +264,12 @@ int main(int argc, char **argv)
             } else alive = relay(c, events);
             if (!alive) close_connection(c);
         }
+        if (ready && !stopping) {
+            bool game_connected = false;
+            for (size_t i = 0; i < BRIDGE_CLIENTS + 1; ++i)
+                if (clients[i].fd[1] >= 0) game_connected = true;
+            activity_tick(now(), game_connected, connect_discord);
+        }
         if (fds[0].revents & POLLIN) {
             int fd = accept(listener, NULL, NULL);
             if (fd < 0) continue;
@@ -270,6 +279,7 @@ int main(int argc, char **argv)
             else { clients[slot].fd[0] = fd; clients[slot].deadline = now() + 2; }
         }
     }
+    activity_clear();
     close(listener);
     for (size_t i = 0; i < BRIDGE_CLIENTS + 1; ++i) close_connection(&clients[i]);
     if (child > 0) stop_child(child, ready);
