@@ -70,9 +70,12 @@ with socket.create_connection(('127.0.0.1', port)) as control:
         args = [str(host), str(os.getpid()), str(fixture), str(endpoint)]
         for enabled, shortcut, expected_title, expected_icon in (
             ("0", True, None, None),
-            ("1", True, "Steam shortcut title", "shortcut-art"),
+            ("1", True, "Steam shortcut title", None),
             ("1", False, "Game title", f"https://shared.fastly.steamstatic.com/community_assets/images/apps/42/{hash_icon}.jpg"),
+            ("1", False, "Game title", "https://cdn.cloudflare.steamstatic.com/steam/apps/42/header.jpg"),
         ):
+            if expected_icon and expected_icon.endswith("/header.jpg"):
+                (cache / (hash_icon + ".jpg")).unlink()
             launch_env = dict(env, NOTPROTON_DISCORD_BASIC_ACTIVITY=enabled)
             if not shortcut:
                 launch_env.pop("SteamGameId")
@@ -98,11 +101,14 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                         send(peer, 1, {"cmd": "DISPATCH", "evt": "READY"})
                         opcode, activity = receive(peer)
                         assert opcode == 1 and activity["cmd"] == "SET_ACTIVITY"
-                        assert activity["args"]["activity"]["details"] == expected_title
+                        assert "details" not in activity["args"]["activity"]
                         assert activity["args"]["activity"]["name"] == expected_title
-                        assert activity["args"]["activity"]["assets"] == {
-                            "large_image": expected_icon, "large_text": expected_title,
-                        }
+                        if expected_icon:
+                            assert activity["args"]["activity"]["assets"] == {
+                                "large_image": expected_icon, "large_text": expected_title,
+                            }
+                        else:
+                            assert "assets" not in activity["args"]["activity"]
                         return peer, activity["args"]["activity"]["timestamps"]["start"]
 
                     fallback, started = accept_fallback()

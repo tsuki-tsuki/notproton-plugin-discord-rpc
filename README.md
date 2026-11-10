@@ -46,8 +46,8 @@ To override the ID, put your numeric Discord Application ID in a plain-text
 file named `activity-client-id` alongside the installed `host` at
 `~/Library/Application Support/notproton/integrations/discord-rpc/`.
 
-The plugin sends the Steam game or shortcut title as both the activity name and
-details, with an elapsed timer. Some Discord clients may use the registered
+The plugin sends the Steam game or shortcut title as the activity name, with an elapsed timer. If Discord rejects the name
+override, the plugin uses the title as the activity details instead. Some Discord clients may use the registered
 application name as the card heading. If you own the application, a short name
 such as **NotProton** gives that heading a readable fallback. When Steam metadata
 is unavailable, the plugin uses the install-folder name. Basic activity yields
@@ -57,13 +57,11 @@ updated ZIP over it.
 
 ### Game artwork
 
-Basic activity looks for a Steam-hosted icon using Steam's local artwork cache.
-Without an available icon, Discord uses the registered application's icon.
-To set artwork explicitly, create an `activity-icons` directory next to the
-installed `host`. Create a file named after the Steam app ID or NotProton's
-numeric shortcut prefix ID, with no extension. Put one public HTTPS image URL
-or Discord asset key in the file. For example, `activity-icons/3081447869`
-would set the artwork for a shortcut using prefix `3081447869`.
+Basic activity uses a Steam-hosted icon when Steam has cached its hash.
+Otherwise it requests the game's Steam header artwork by AppID. To override
+Steam game artwork, create an `activity-icons/<AppID>` file next to the installed
+`host` containing a public HTTPS image URL or Discord asset key. Non-Steam
+shortcuts use the registered Discord application's icon.
 
 ## Build and verify
 

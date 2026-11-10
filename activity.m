@@ -119,7 +119,7 @@ static NSString *shortcut_title(NSString *steam, uint32_t id)
 
 static NSString *find_game_icon(NSString *directory, NSString *steam, NSString *app_id, bool shortcut)
 {
-    if (!digits(app_id)) return nil;
+    if (shortcut || !digits(app_id)) return nil;
     NSString *override = [[directory stringByAppendingPathComponent:@"activity-icons"]
         stringByAppendingPathComponent:app_id];
     NSString *icon = [read_text(override, 1024) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
@@ -130,15 +130,13 @@ static NSString *find_game_icon(NSString *directory, NSString *steam, NSString *
             [icon rangeOfString:@"^[a-zA-Z0-9_-]+$" options:NSRegularExpressionSearch].location != NSNotFound)
             return icon;
     }
-    if (shortcut) return nil;
-
     NSString *cache = [[steam stringByAppendingPathComponent:@"appcache/librarycache"] stringByAppendingPathComponent:app_id];
     NSArray<NSString *> *entries = [NSFileManager.defaultManager contentsOfDirectoryAtPath:cache error:NULL];
     for (NSString *entry in [entries sortedArrayUsingSelector:@selector(compare:)]) {
         if ([entry rangeOfString:@"^[0-9a-f]{40}\\.jpg$" options:NSRegularExpressionSearch].location != NSNotFound)
             return [NSString stringWithFormat:@"https://shared.fastly.steamstatic.com/community_assets/images/apps/%@/%@", app_id, entry];
     }
-    return nil;
+    return [NSString stringWithFormat:@"https://cdn.cloudflare.steamstatic.com/steam/apps/%@/header.jpg", app_id];
 }
 
 void activity_init(const char *host_path)
@@ -201,8 +199,8 @@ static bool send_json(uint32_t opcode, NSDictionary *body)
 
 static bool set_activity(bool active)
 {
-    NSMutableDictionary *activity = [@{@"details": game_title, @"timestamps": @{@"start": started}} mutableCopy];
-    if (use_activity_name) activity[@"name"] = game_title;
+    NSMutableDictionary *activity = [@{@"timestamps": @{@"start": started}} mutableCopy];
+    activity[use_activity_name ? @"name" : @"details"] = game_title;
     if (game_icon) activity[@"assets"] = @{@"large_image": game_icon, @"large_text": game_title};
     id value = active ? activity : NSNull.null;
     return send_json(1, @{@"cmd": @"SET_ACTIVITY",
@@ -235,8 +233,8 @@ static bool handle_frame(uint32_t opcode, NSData *payload)
     if (![body isKindOfClass:NSDictionary.class]) return false;
     if ([body[@"evt"] isEqual:@"ERROR"]) {
         if (published && [body[@"nonce"] isEqual:@"activity"] && (use_activity_name || game_icon)) {
-            if (use_activity_name) use_activity_name = false;
-            else game_icon = nil;
+            if (game_icon) game_icon = nil;
+            else use_activity_name = false;
             return set_activity(true);
         }
         return false;
