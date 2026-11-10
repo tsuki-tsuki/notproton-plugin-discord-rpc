@@ -4,7 +4,7 @@ An opt-in plugin that forwards Discord Rich Presence from Windows games running
 under NotProton to the macOS Discord desktop app. It bridges Discord's Windows
 named pipe to Discord's local Unix socket. The game supplies its own Discord
 application ID and activity for relay mode. The optional basic activity uses
-a Discord Application ID you configure.
+the bundled Discord Application ID.
 
 Choose one ZIP for your NotProton build. Both install the same per-game toggle.
 
@@ -38,13 +38,13 @@ To uninstall, quit Steam and remove `plugins/discord-rpc.conf` and
 
 ## Optional basic activity
 
-1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
-   Choose a display name such as **NotProton** and copy its **Application ID**.
-2. Create a plain-text file named `activity-client-id` alongside the installed
-   `host` at `~/Library/Application Support/notproton/integrations/discord-rpc/`.
-   Put only the numeric Application ID in the file.
-3. With the main Discord Rich Presence toggle enabled, turn on **Show basic
-   Discord activity** in the game's Compatibility settings. It defaults to off.
+With the main **Discord Rich Presence** toggle enabled, turn on **Show basic
+Discord activity** in the game's Compatibility settings. It defaults to off
+and uses the bundled Application ID `1569701971353534514`.
+
+To override the ID, put your numeric Discord Application ID in a plain-text
+file named `activity-client-id` alongside the installed `host` at
+`~/Library/Application Support/notproton/integrations/discord-rpc/`.
 
 Discord shows the application name with the Steam game title in the activity
 details and an elapsed timer. The title comes from Steam's local manifest when

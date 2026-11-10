@@ -32,7 +32,6 @@ def send(peer, opcode, body):
 binary = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix="np-activity-", dir="/tmp") as directory:
     root = Path(directory)
-    (root / "activity-client-id").write_text("123456789012345678\n")
     host = root / "host"
     host.symlink_to(binary)
     (root / "appmanifest_42.acf").write_text('"AppState"\n{\n "name" "Game title"\n}\n')
@@ -73,7 +72,7 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                     def accept_fallback():
                         peer, _ = discord.accept()
                         peer.settimeout(3)
-                        assert receive(peer) == (0, {"v": 1, "client_id": "123456789012345678"})
+                        assert receive(peer) == (0, {"v": 1, "client_id": "1569701971353534514"})
                         send(peer, 1, {"cmd": "DISPATCH", "evt": "READY"})
                         opcode, activity = receive(peer)
                         assert opcode == 1 and activity["cmd"] == "SET_ACTIVITY"

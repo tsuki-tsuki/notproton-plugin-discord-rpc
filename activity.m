@@ -47,9 +47,9 @@ void activity_init(const char *host_path)
         NSString *config = [directory stringByAppendingPathComponent:@"activity-client-id"];
         client_id = [read_text(config, 128) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
         if (!digits(client_id)) {
-            client_id = nil;
-            fprintf(stderr, "NotProton Discord: basic activity requires an application ID in activity-client-id\n");
-            return;
+            if ([[NSFileManager defaultManager] fileExistsAtPath:config])
+                fprintf(stderr, "NotProton Discord: invalid activity-client-id, using the bundled Application ID\n");
+            client_id = @"1569701971353534514";
         }
 
         NSString *install = [environment("STEAM_COMPAT_INSTALL_PATH") stringByStandardizingPath];
