@@ -144,6 +144,20 @@ with tempfile.TemporaryDirectory(prefix="np-discord-wine-") as directory:
         assert host.returncode == 0, errors.decode()
         print("  ok    Wine helper exits when its native host stops")
 
+        host = subprocess.Popen(
+            [str(output / "session-helper"), str(os.getpid()), wine, env["WINEPREFIX"]],
+            env=dict(env, NOTPROTON_DISCORD_SOCKET_DIR=str(tmp)),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        with selectors.DefaultSelector() as selector:
+            selector.register(host.stdout, selectors.EVENT_READ)
+            assert selector.select(15), "restarted bridge readiness timed out"
+        assert host.stdout.readline() == b"ready\n"
+        result = subprocess.run([wine, str(output / "test-client.exe"), "session-exit"],
+                                env=env, capture_output=True, timeout=12)
+        assert result.returncode == 0, "Discord helper kept Wine's session shutdown event from firing"
+        print("  ok    bridge does not keep Wine's game session alive")
+
     finally:
         if host and host.poll() is None:
             host.terminate()

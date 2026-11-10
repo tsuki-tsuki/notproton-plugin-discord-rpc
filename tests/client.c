@@ -1,6 +1,7 @@
 // A Windows named-pipe client exercises the same endpoint used by Discord's SDK.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <winternl.h>
 #include <tlhelp32.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -98,6 +99,14 @@ static int rpc(HANDLE pipe, const char *id)
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && !strcmp(argv[1], "session-exit")) {
+        HANDLE shutdown = NULL;
+        if (NtSetInformationProcess(GetCurrentProcess(), (PROCESSINFOCLASS)1000,
+                                    &shutdown, sizeof(shutdown)) || !shutdown) return 1;
+        DWORD result = WaitForSingleObject(shutdown, 8000);
+        CloseHandle(shutdown);
+        return result == WAIT_OBJECT_0 ? 0 : 1;
+    }
     if (argc == 2 && !strcmp(argv[1], "threads")) return thread_count();
     if (argc < 3) return 64;
     HANDLE pipe = INVALID_HANDLE_VALUE;

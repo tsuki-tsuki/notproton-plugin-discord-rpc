@@ -229,7 +229,12 @@ int main(int argc, char **argv)
     double startup_deadline = now() + 60;
     int status = 0;
     while (!stopping && getppid() == parent) {
-        if (waitpid(child, NULL, WNOHANG) == child) { child = -1; status = 1; break; }
+        int child_status;
+        if (waitpid(child, &child_status, WNOHANG) == child) {
+            child = -1;
+            status = !ready || !WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0;
+            break;
+        }
         if (!ready && now() > startup_deadline) { status = 1; break; }
         struct pollfd fds[1 + 2 * (BRIDGE_CLIENTS + 1)] = {{.fd = listener, .events = POLLIN}};
         for (size_t i = 0; i < BRIDGE_CLIENTS + 1; ++i) {

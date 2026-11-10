@@ -25,13 +25,13 @@ build/host: host.c protocol.h | build
 	codesign -fs - --identifier org.notproton-plugin.discord-rpc.host $@
 
 build/notproton-discord.exe: pipe.c protocol.h | build
-	$(MINGW_CC) $(CFLAGS) -mwindows $< -lws2_32 -o $@
+	$(MINGW_CC) $(CFLAGS) -mwindows $< -lws2_32 -lntdll -o $@
 
 build/test-client.exe: tests/client.c protocol.h | build
-	$(MINGW_CC) $(CFLAGS) $< -o $@
+	$(MINGW_CC) $(CFLAGS) $< -lntdll -o $@
 
 build/test-client32.exe: tests/client.c protocol.h | build
-	$(MINGW_CC32) $(CFLAGS) $< -o $@
+	$(MINGW_CC32) $(CFLAGS) $< -lntdll -o $@
 
 test: all
 	$(PYTHON) tests/bootstrap.py build/discord-rpc.dylib

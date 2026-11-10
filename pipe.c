@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
+#include <winternl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -183,21 +184,21 @@ static bool listen_pipe(struct listener *listener)
     return listener->pending;
 }
 
-static int accept_clients(struct listener *listeners, SOCKET control)
+static int accept_clients(struct listener *listeners, SOCKET control, HANDLE shutdown)
 {
     WSAEVENT event = WSACreateEvent();
     if (event == WSA_INVALID_EVENT) return 1;
     int status = 1;
     if (WSAEventSelect(control, event, FD_READ | FD_CLOSE)) goto finished;
     for (;;) {
-        HANDLE events[BRIDGE_CLIENTS + 1] = {event};
+        HANDLE events[BRIDGE_CLIENTS + 2] = {event, shutdown};
         for (unsigned i = 0; i < BRIDGE_CLIENTS; ++i)
-            events[i + 1] = listeners[i].worker ? listeners[i].worker : listeners[i].connection.hEvent;
-        DWORD result = WaitForMultipleObjects(BRIDGE_CLIENTS + 1, events, FALSE, INFINITE);
-        // The control connection stays silent until the native host shuts down.
-        if (result == WAIT_OBJECT_0) { status = 0; break; }
-        if (result < WAIT_OBJECT_0 + 1 || result > WAIT_OBJECT_0 + BRIDGE_CLIENTS) break;
-        struct listener *listener = &listeners[result - WAIT_OBJECT_0 - 1];
+            events[i + 2] = listeners[i].worker ? listeners[i].worker : listeners[i].connection.hEvent;
+        DWORD result = WaitForMultipleObjects(BRIDGE_CLIENTS + 2, events, FALSE, INFINITE);
+        // Stop on native host disconnect or Wine session shutdown.
+        if (result == WAIT_OBJECT_0 || result == WAIT_OBJECT_0 + 1) { status = 0; break; }
+        if (result < WAIT_OBJECT_0 + 2 || result > WAIT_OBJECT_0 + BRIDGE_CLIENTS + 1) break;
+        struct listener *listener = &listeners[result - WAIT_OBJECT_0 - 2];
         if (listener->worker) {
             CloseHandle(listener->worker);
             listener->worker = NULL;
@@ -249,13 +250,22 @@ int main(void)
         listener->connection.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
         if (!listener->connection.hEvent || !listen_pipe(listener)) break;
     }
-    if (count == BRIDGE_CLIENTS) {
+    // ProcessWineMakeProcessSystem excludes the relay from Wine's user process count.
+    HANDLE shutdown = NULL;
+    if (count != BRIDGE_CLIENTS) {
+        fprintf(stderr, "NotProton Discord: cannot own pipe (%lu)\n", GetLastError());
+    } else if (NtSetInformationProcess(GetCurrentProcess(), (PROCESSINFOCLASS)1000,
+                                       &shutdown, sizeof(shutdown)) || !shutdown) {
+        // A normal user process would keep Wine's session alive after the game exits.
+        fprintf(stderr, "NotProton Discord: could not register as a Wine system process\n");
+    } else {
         SOCKET control = connect_host(BRIDGE_CONTROL);
         if (control != INVALID_SOCKET) {
-            status = accept_clients(listeners, control);
+            status = accept_clients(listeners, control, shutdown);
             closesocket(control);
         }
-    } else fprintf(stderr, "NotProton Discord: cannot own pipe (%lu)\n", GetLastError());
+    }
+    if (shutdown) CloseHandle(shutdown);
     SetEvent(stopping);
     for (unsigned i = 0; i < BRIDGE_CLIENTS; ++i) {
         struct listener *listener = &listeners[i];
