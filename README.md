@@ -70,8 +70,9 @@ To enable SteamGridDB, put your key in a plain-text file named
 `~/Library/Application Support/notproton/integrations/discord-rpc/`.
 Keep this file private. The plugin sends the key and the game's Steam AppID
 to SteamGridDB only when it needs a lookup. If the API returns no suitable
-icon or times out, the Steam header remains the fallback. Non-Steam shortcuts
-use the registered Discord application's icon.
+icon or times out, the Steam header remains the fallback. With the bundled
+Discord application, non-Steam shortcuts request the `notproton` art asset.
+The plugin also tries that asset if Discord rejects a game image.
 
 ## Build and verify
 

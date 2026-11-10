@@ -70,7 +70,7 @@ with socket.create_connection(('127.0.0.1', port)) as control:
         args = [str(host), str(os.getpid()), str(fixture), str(endpoint)]
         for enabled, shortcut, expected_title, expected_icon in (
             ("0", True, None, None),
-            ("1", True, "Steam shortcut title", None),
+            ("1", True, "Steam shortcut title", "notproton"),
             ("1", False, "Game title", f"https://shared.fastly.steamstatic.com/community_assets/images/apps/42/{hash_icon}.jpg"),
             ("1", False, "Game title", "https://cdn.cloudflare.steamstatic.com/steam/apps/42/header.jpg"),
         ):

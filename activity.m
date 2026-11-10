@@ -9,6 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
+static NSString *const bundled_client_id = @"1569701971353534514";
+static NSString *const bundled_icon = @"notproton";
 static NSString *client_id;
 static NSString *game_title;
 static NSString *game_icon;
@@ -206,7 +208,7 @@ void activity_init(const char *host_path)
         if (!digits(client_id)) {
             if ([[NSFileManager defaultManager] fileExistsAtPath:config])
                 fprintf(stderr, "NotProton Discord: invalid activity-client-id, using the bundled Application ID\n");
-            client_id = @"1569701971353534514";
+            client_id = bundled_client_id;
         }
 
         NSString *install = [environment("STEAM_COMPAT_INSTALL_PATH") stringByStandardizingPath];
@@ -236,6 +238,7 @@ void activity_init(const char *host_path)
         }
         NSString *icon_id = shortcut ? [NSString stringWithFormat:@"%u", shortcut] : app_id;
         game_icon = find_game_icon(directory, steam, icon_id, shortcut != 0);
+        if (!game_icon && [client_id isEqual:bundled_client_id]) game_icon = bundled_icon;
         started = @(time(NULL));
     }
 }
@@ -290,7 +293,10 @@ static bool handle_frame(uint32_t opcode, NSData *payload)
     if (![body isKindOfClass:NSDictionary.class]) return false;
     if ([body[@"evt"] isEqual:@"ERROR"]) {
         if (published && [body[@"nonce"] isEqual:@"activity"] && (use_activity_name || game_icon)) {
-            if (game_icon) game_icon = nil;
+            if (game_icon) {
+                game_icon = [client_id isEqual:bundled_client_id] && ![game_icon isEqual:bundled_icon]
+                    ? bundled_icon : nil;
+            }
             else use_activity_name = false;
             return set_activity(true);
         }
