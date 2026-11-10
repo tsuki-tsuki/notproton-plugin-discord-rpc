@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="np-discord-wine-") as directory:
         subprocess.run([wine, "wineboot", "-u"], env=env, check=True, timeout=90,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         host = subprocess.Popen(
-            [str(output / "host"), str(os.getpid()), wine, str(output / "notproton-discord.exe")],
+            [str(output / "session-helper"), str(os.getpid()), wine, env["WINEPREFIX"]],
             env=dict(env, NOTPROTON_DISCORD_SOCKET_DIR=str(tmp)),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
@@ -97,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="np-discord-wine-") as directory:
         client(32, "test-client32.exe")
         # The first-instance guard must leave the existing server untouched.
         duplicate = subprocess.run(
-            [str(output / "host"), str(os.getpid()), wine, str(output / "notproton-discord.exe")],
+            [str(output / "session-helper"), str(os.getpid()), wine, env["WINEPREFIX"]],
             env=dict(env, NOTPROTON_DISCORD_SOCKET_DIR=str(tmp)),
             capture_output=True, timeout=15,
         )
@@ -144,13 +144,6 @@ with tempfile.TemporaryDirectory(prefix="np-discord-wine-") as directory:
         assert host.returncode == 0, errors.decode()
         print("  ok    Wine helper exits when its native host stops")
 
-        injected_env = dict(env, DYLD_INSERT_LIBRARIES=str(output / "discord-rpc.dylib"),
-                            DISCORD_RPC_PLUGIN="1", NOTPROTON_DISCORD_SOCKET_DIR=str(tmp))
-        result = subprocess.run([wine, str(output / "test-client.exe"), "echo", "65536", "17"],
-                                env=injected_env, capture_output=True, text=True, timeout=20)
-        assert result.returncode == 0, (result.stdout, result.stderr)
-        assert "ready" in result.stdout, (result.stdout, result.stderr)
-        print("  ok    Wine loads the plugin and bridges a client launched in that process")
     finally:
         if host and host.poll() is None:
             host.terminate()

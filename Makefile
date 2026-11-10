@@ -3,8 +3,8 @@ MACFLAGS := -arch arm64 -arch x86_64 -mmacosx-version-min=15.0
 MINGW_CC ?= x86_64-w64-mingw32-gcc
 MINGW_CC32 ?= i686-w64-mingw32-gcc
 PYTHON ?= python3
-RUNTIME := build/discord-rpc.dylib build/host build/notproton-discord.exe
-ARCHIVE := dist/notproton-plugin-discord-rpc.zip
+RUNTIME := build/session-helper build/host build/notproton-discord.exe
+ARCHIVE := dist/notproton-plugin-discord-rpc-session-helper.zip
 
 .PHONY: all test wine-test release clean
 all: $(RUNTIME)
@@ -12,9 +12,8 @@ all: $(RUNTIME)
 build dist:
 	mkdir -p $@
 
-build/discord-rpc.dylib: bootstrap.c | build
-	$(CC) $(CFLAGS) $(MACFLAGS) -dynamiclib $< -o $@
-	codesign -fs - --identifier org.notproton-plugin.discord-rpc $@
+build/session-helper: session-helper | build
+	cp -p $< $@
 
 build/host: host.c protocol.h | build
 	$(CC) $(CFLAGS) $(MACFLAGS) $< -o $@
@@ -30,7 +29,7 @@ build/test-client32.exe: tests/client.c protocol.h | build
 	$(MINGW_CC32) $(CFLAGS) $< -o $@
 
 test: all
-	$(PYTHON) tests/bootstrap.py build/discord-rpc.dylib
+	$(PYTHON) tests/session_helper.py build/session-helper
 	$(PYTHON) tests/host.py build/host
 
 wine-test: all build/test-client.exe build/test-client32.exe

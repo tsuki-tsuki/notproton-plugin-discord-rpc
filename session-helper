@@ -1,0 +1,18 @@
+#!/bin/sh
+# Keep the relay a direct child of NotProton's session owner.
+set -eu
+
+usage() {
+    echo "usage: session-helper SESSION_OWNER_PID WINE_LOADER WINE_PREFIX (absolute paths)" >&2
+    exit 64
+}
+
+[ "$#" -eq 3 ] || usage
+case "$2" in /*) ;; *) usage ;; esac
+case "$3" in /*) ;; *) usage ;; esac
+[ -f "$2" ] && [ -x "$2" ] && [ -d "$3" ] || usage
+
+plugin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+export WINEPREFIX="$3"
+unset DYLD_INSERT_LIBRARIES STEAM_DYLD_INSERT_LIBRARIES NOTPROTON_GAME_LOADER
+exec "$plugin_dir/host" "$1" "$2" "$plugin_dir/notproton-discord.exe"
