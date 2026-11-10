@@ -50,9 +50,8 @@ The plugin sends the Steam game or shortcut title as the activity name, with an 
 override, the plugin uses the title as the activity details instead. Some Discord clients may use the registered
 application name as the card heading. If you own the application, a short name
 such as **NotProton** gives that heading a readable fallback. When Steam metadata
-is unavailable, the plugin uses the install-folder name. Basic activity waits
-five seconds after the bridge is ready, yields while a game has a Discord RPC
-connection, and clears when the session ends.
+is unavailable, the plugin uses the install-folder name. Basic activity yields
+while a game has a Discord RPC connection and clears when the session ends.
 The configuration is local to your install and persists when you extract an
 updated ZIP over it.
 

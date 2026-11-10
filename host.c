@@ -124,12 +124,9 @@ static bool authenticate(struct connection *c, const char *token, bool *ready)
         return true;
     }
     if (c->hello[BRIDGE_TOKEN_LENGTH] != BRIDGE_STREAM) return false;
-    // Withdraw our card before opening the game's Discord connection.
-    activity_clear();
     c->fd[1] = connect_discord();
-    if (c->fd[1] < 0) return false;
-    fputs("Discord bridge: relaying game RPC\n", stderr);
-    return true;
+    if (c->fd[1] >= 0) activity_clear();
+    return c->fd[1] >= 0;
 }
 
 // Each direction has a bounded buffer. Stop reading a full buffer until its peer drains it.
