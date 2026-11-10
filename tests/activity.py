@@ -7,6 +7,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def read_exact(peer, length):
@@ -84,7 +85,7 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
                 try:
                     assert process.stdout.readline() == b"ready\n"
-                    discord.settimeout(3)
+                    discord.settimeout(8)
                     if enabled == "0":
                         discord.settimeout(1)
                         try:
@@ -110,6 +111,18 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                         else:
                             assert "assets" not in activity["args"]["activity"]
                         return peer, activity["args"]["activity"]["timestamps"]["start"]
+
+                    if shortcut:
+                        # The game can open RPC shortly after the bridge reports ready.
+                        time.sleep(0.4)
+                        port, token = json.loads(endpoint.read_text())
+                        with socket.create_connection(("127.0.0.1", port)) as early_game:
+                            early_game.sendall(token.encode() + bytes([1]))
+                            send(early_game, 0, {"v": 1, "client_id": "early-game"})
+                            peer, _ = discord.accept()
+                            with peer:
+                                peer.settimeout(3)
+                                assert receive(peer) == (0, {"v": 1, "client_id": "early-game"})
 
                     fallback, started = accept_fallback()
                     with fallback:

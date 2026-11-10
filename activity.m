@@ -19,7 +19,7 @@ static NSNumber *started;
 static int fd = -1;
 static bool published;
 static bool use_activity_name = true;
-static double retry_at, ready_deadline;
+static double retry_at, ready_deadline, startup_grace_until;
 static unsigned char input[65536];
 static size_t used;
 
@@ -331,6 +331,8 @@ void activity_tick(double now, bool game_connected, int (*connect_socket)(void))
 {
     if (!client_id) return;
     @autoreleasepool {
+        // Give the game's own Discord client the first chance to connect.
+        if (!startup_grace_until) startup_grace_until = now + 5;
         if (game_connected) {
             retry_at = now + 0.5;
             return;
@@ -340,7 +342,7 @@ void activity_tick(double now, bool game_connected, int (*connect_socket)(void))
             disconnect();
             retry_at = now + 2;
         }
-        if (now < retry_at) return;
+        if (now < startup_grace_until || now < retry_at) return;
         @synchronized (NSURLSession.class) {
             if (grid_pending) return;
             if (grid_icon) {
