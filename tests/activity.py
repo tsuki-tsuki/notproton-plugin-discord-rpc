@@ -35,6 +35,11 @@ with tempfile.TemporaryDirectory(prefix="np-activity-", dir="/tmp") as directory
     host = root / "host"
     host.symlink_to(binary)
     (root / "appmanifest_42.acf").write_text('"AppState"\n{\n "name" "Game title"\n}\n')
+    shortcuts = root / "userdata/123/config/shortcuts.vdf"
+    shortcuts.parent.mkdir(parents=True)
+    shortcuts.write_bytes(b"\x00shortcuts\x00\x000\x00\x01AppName\x00Steam shortcut title\x00"
+                          b"\x02appid\x00" + struct.pack("<I", 0x80000042)
+                          + b"\x00tags\x00\x010\x00test\x00\x08\x08\x08")
     fixture = root / "wine"
     fixture.write_text(f"""#!{sys.executable}
 import json, os, socket, sys
@@ -52,7 +57,9 @@ with socket.create_connection(('127.0.0.1', port)) as control:
         discord.bind(str(root / "discord-ipc-0"))
         discord.listen()
         env = dict(os.environ, NOTPROTON_DISCORD_SOCKET_DIR=directory, SteamAppId="42",
-                   STEAM_COMPAT_INSTALL_PATH=str(root / "common" / "Game folder"))
+                   STEAM_COMPAT_INSTALL_PATH=str(root / "common" / "Game folder"),
+                   SteamGameId=str((0x80000042 << 32) | 0x02000000),
+                   STEAM_COMPAT_CLIENT_INSTALL_PATH=str(root))
         args = [str(host), str(os.getpid()), str(fixture), str(endpoint)]
         for enabled in ("0", "1"):
             with subprocess.Popen(args, env=dict(env, NOTPROTON_DISCORD_BASIC_ACTIVITY=enabled),
@@ -76,7 +83,8 @@ with socket.create_connection(('127.0.0.1', port)) as control:
                         send(peer, 1, {"cmd": "DISPATCH", "evt": "READY"})
                         opcode, activity = receive(peer)
                         assert opcode == 1 and activity["cmd"] == "SET_ACTIVITY"
-                        assert activity["args"]["activity"]["details"] == "Game title"
+                        assert activity["args"]["activity"]["details"] == "Steam shortcut title"
+                        assert activity["args"]["activity"]["name"] == "Steam shortcut title"
                         return peer, activity["args"]["activity"]["timestamps"]["start"]
 
                     fallback, started = accept_fallback()

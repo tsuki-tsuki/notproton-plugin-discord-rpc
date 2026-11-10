@@ -46,9 +46,11 @@ To override the ID, put your numeric Discord Application ID in a plain-text
 file named `activity-client-id` alongside the installed `host` at
 `~/Library/Application Support/notproton/integrations/discord-rpc/`.
 
-Discord shows the application name with the Steam game title in the activity
-details and an elapsed timer. The title comes from Steam's local manifest when
-available, with the install-folder name as a fallback. Basic activity yields
+The plugin sends the Steam game or shortcut title as both the activity name and
+details, with an elapsed timer. Some Discord clients may use the registered
+application name as the card heading. If you own the application, a short name
+such as **NotProton** gives that heading a readable fallback. When Steam metadata
+is unavailable, the plugin uses the install-folder name. Basic activity yields
 while a game has a Discord RPC connection and clears when the session ends.
 The configuration is local to your install and persists when you extract an
 updated ZIP over it.

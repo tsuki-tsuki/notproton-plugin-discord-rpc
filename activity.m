@@ -14,6 +14,7 @@ static NSString *game_title;
 static NSNumber *started;
 static int fd = -1;
 static bool published;
+static bool use_activity_name = true;
 static double retry_at, ready_deadline;
 static unsigned char input[65536];
 static size_t used;
@@ -39,6 +40,74 @@ static NSString *read_text(NSString *path, NSUInteger limit)
     return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
 
+// Steam's binary shortcut file nests numbered records under "shortcuts".
+static NSString *shortcut_record(const unsigned char **cursor, const unsigned char *end,
+                                 uint32_t wanted, unsigned depth)
+{
+    NSString *title = nil;
+    uint32_t id = 0;
+    while (*cursor < end) {
+        unsigned type = *(*cursor)++;
+        if (type == 8) return depth == 2 && id == wanted ? title : nil;
+        const unsigned char *key = *cursor;
+        const unsigned char *zero = memchr(key, 0, end - key);
+        if (!zero) break;
+        *cursor = zero + 1;
+        if (type == 0 && depth < 8) {
+            NSString *match = shortcut_record(cursor, end, wanted, depth + 1);
+            if (match.length) return match;
+        } else if (type == 1) {
+            const unsigned char *value = *cursor;
+            zero = memchr(value, 0, end - value);
+            if (!zero) break;
+            if (depth == 2 && !strcasecmp((const char *)key, "appname"))
+                title = [[NSString alloc] initWithBytes:value length:zero - value encoding:NSUTF8StringEncoding];
+            *cursor = zero + 1;
+        } else if (type == 2 && end - *cursor >= 4) {
+            if (depth == 2 && !strcasecmp((const char *)key, "appid")) {
+                memcpy(&id, *cursor, sizeof(id));
+                id = OSSwapLittleToHostInt32(id);
+            }
+            *cursor += 4;
+        } else break;
+    }
+    *cursor = end;
+    return nil;
+}
+
+static NSString *shortcut_title(void)
+{
+    NSString *game_id = environment("SteamGameId");
+    if (!digits(game_id)) return nil;
+    errno = 0;
+    uint64_t id = strtoull(game_id.UTF8String, NULL, 10);
+    if (errno || (uint32_t)id != 0x02000000) return nil;
+
+    NSFileManager *files = NSFileManager.defaultManager;
+    NSString *steam = [environment("STEAM_COMPAT_CLIENT_INSTALL_PATH") stringByStandardizingPath];
+    for (unsigned level = 0; steam.isAbsolutePath && level < 8; ++level) {
+        NSString *userdata = [steam stringByAppendingPathComponent:@"userdata"];
+        NSArray<NSString *> *accounts = [files contentsOfDirectoryAtPath:userdata error:NULL];
+        if (accounts) {
+            for (NSString *account in accounts) {
+                if (!digits(account)) continue;
+                NSString *config = [[userdata stringByAppendingPathComponent:account]
+                    stringByAppendingPathComponent:@"config/shortcuts.vdf"];
+                NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:config];
+                NSData *data = [file readDataUpToLength:4 * 1024 * 1024 + 1 error:NULL];
+                [file closeFile];
+                if (!data.length || data.length > 4 * 1024 * 1024) continue;
+                const unsigned char *cursor = data.bytes;
+                NSString *title = shortcut_record(&cursor, cursor + data.length, (uint32_t)(id >> 32), 0);
+                if (title.length) return title;
+            }
+            return nil;
+        }
+        steam = steam.stringByDeletingLastPathComponent;
+    }
+    return nil;
+}
+
 void activity_init(const char *host_path)
 {
     @autoreleasepool {
@@ -53,13 +122,9 @@ void activity_init(const char *host_path)
         }
 
         NSString *install = [environment("STEAM_COMPAT_INSTALL_PATH") stringByStandardizingPath];
-        if (install.length == 0 || !install.isAbsolutePath) {
-            client_id = nil;
-            return;
-        }
-        game_title = install.lastPathComponent;
+        game_title = shortcut_title();
         NSString *app_id = environment("SteamAppId");
-        if (digits(app_id)) {
+        if (!game_title && install.isAbsolutePath && digits(app_id)) {
             NSString *steamapps = install.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
             NSString *manifest = [steamapps stringByAppendingPathComponent:[NSString stringWithFormat:@"appmanifest_%@.acf", app_id]];
             NSString *vdf = read_text(manifest, 1024 * 1024);
@@ -68,6 +133,12 @@ void activity_init(const char *host_path)
                 NSTextCheckingResult *match = [name firstMatchInString:vdf options:0 range:NSMakeRange(0, vdf.length)];
                 if (match) game_title = [vdf substringWithRange:[match rangeAtIndex:1]];
             }
+        }
+        if (!game_title && install.isAbsolutePath)
+            game_title = [install.lastPathComponent stringByReplacingOccurrencesOfString:@"_" withString:@" "];
+        if (!game_title.length) {
+            client_id = nil;
+            return;
         }
         if (game_title.length > 128) {
             NSRange last = [game_title rangeOfComposedCharacterSequenceAtIndex:127];
@@ -93,7 +164,9 @@ static bool send_json(uint32_t opcode, NSDictionary *body)
 
 static bool set_activity(bool active)
 {
-    id value = active ? @{@"details": game_title, @"timestamps": @{@"start": started}} : NSNull.null;
+    NSMutableDictionary *activity = [@{@"details": game_title, @"timestamps": @{@"start": started}} mutableCopy];
+    if (use_activity_name) activity[@"name"] = game_title;
+    id value = active ? activity : NSNull.null;
     return send_json(1, @{@"cmd": @"SET_ACTIVITY",
                           @"nonce": active ? @"activity" : @"clear",
                           @"args": @{@"pid": @(getpid()), @"activity": value}});
@@ -122,7 +195,13 @@ static bool handle_frame(uint32_t opcode, NSData *payload)
     if (opcode != 1) return true;
     id body = [NSJSONSerialization JSONObjectWithData:payload options:0 error:NULL];
     if (![body isKindOfClass:NSDictionary.class]) return false;
-    if ([body[@"evt"] isEqual:@"ERROR"]) return false;
+    if ([body[@"evt"] isEqual:@"ERROR"]) {
+        if (published && use_activity_name && [body[@"nonce"] isEqual:@"activity"]) {
+            use_activity_name = false;
+            return set_activity(true);
+        }
+        return false;
+    }
     if (!published && [body[@"evt"] isEqual:@"READY"]) {
         if (!set_activity(true)) return false;
         published = true;
