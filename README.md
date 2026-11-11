@@ -11,7 +11,7 @@ Choose one ZIP for your NotProton build. Both install the same per-game toggle.
 | Archive | Compatibility |
 | --- | --- |
 | `notproton-plugin-discord-rpc.zip` | NotProton 1.2.4 or its plugin preview on supported Rosetta tools |
-| `notproton-plugin-discord-rpc-session-helper.zip` | Rosetta and FEX on a NotProton build implementing the proposed `session_helper` field |
+| `notproton-plugin-discord-rpc-session-helper.zip` | Rosetta and FEX with [NotProton session helper support](https://github.com/NotProtonNot/NotProton/pull/300) |
 
 Games need to implement Discord's local RPC protocol for the bridge to show
 activity.
